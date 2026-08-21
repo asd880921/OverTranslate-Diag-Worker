@@ -90,5 +90,5 @@ remembered, for an upload to go away.
 
 ## Running it
 
-See [OPERATING.md](OPERATING.md) — reading a bundle somebody sent, seeing what has been uploaded,
-redeploying, and first-time setup.
+See [OPERATING.md](OPERATING.md)（繁體中文）or [OPERATING.en.md](OPERATING.en.md) — reading a bundle
+somebody sent, seeing what has been uploaded, redeploying, and first-time setup.
