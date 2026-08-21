@@ -49,7 +49,7 @@ const ABOUT =
   "Source: https://github.com/asd880921/OverTranslate-Diag-Worker\n";
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/") {
@@ -101,22 +101,27 @@ export default {
     // tail is what stops the key itself being guessable from the code.
     const key = `${code}/${stamp(now)}-${randomHex(8)}.zip`;
 
-    await env.BUNDLES.put(key, body, {
-      expirationTtl: RETENTION_SECONDS,
-      // Deliberately no IP and no identifier of any kind: what is useful when reading a report is
-      // which build it came from and what it was running on, and nothing here should be able to tie
-      // two uploads to the same person.
-      //
-      // Metadata comes back with a key listing without the value being read, which is what makes
-      // finding one bundle among a month of them a listing rather than a run of downloads.
-      metadata: {
-        code,
-        uploadedAt: now.toISOString(),
-        appVersion: header(request, "x-overtranslate-version"),
-        os: header(request, "x-overtranslate-os"),
-        bytes: body.byteLength,
-      },
-    });
+    // Deliberately no IP and no identifier of any kind: what is useful when reading a report is
+    // which build it came from and what it was running on, and nothing here should be able to tie
+    // two uploads to the same person.
+    //
+    // Metadata comes back with a key listing without the value being read, which is what makes
+    // finding one bundle among a month of them a listing rather than a run of downloads. The same
+    // few fields are all the notification below carries, for the same reason.
+    const metadata = {
+      code,
+      uploadedAt: now.toISOString(),
+      appVersion: header(request, "x-overtranslate-version"),
+      os: header(request, "x-overtranslate-os"),
+      bytes: body.byteLength,
+    };
+
+    await env.BUNDLES.put(key, body, { expirationTtl: RETENTION_SECONDS, metadata });
+
+    // After the put, and outside the response: the bundle is stored by this point, so whether a
+    // chat service answered is not something the person reporting a bug should wait for or hear
+    // about.
+    ctx.waitUntil(notify(env, metadata));
 
     return json(200, { code: format(code) });
   },
@@ -151,6 +156,99 @@ async function isRateLimited(env, request) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Says in Discord that an upload landed, so that finding out one did stops depending on the
+ * maintainer remembering to run the listing. `tools/fetch-bundle.mjs` with no arguments is still
+ * the answer to "what is in the store" — this is a nudge, not a record of anything.
+ *
+ * An absent binding means no notification rather than no service, and so does a refusal from
+ * Discord: the same reasoning as the rate limiter, one step further along. By the time this runs
+ * the bundle is stored and listable, and nothing here can change the response the uploader gets.
+ *
+ * What the message carries is exactly what the key metadata carries. The bundle does not go with
+ * it: it is text that was on somebody's screen, and it stays in the store, where getting it out is
+ * a deliberate act rather than something that lands in a chat client's cache on several machines.
+ */
+async function notify(env, metadata) {
+  if (!env.DISCORD_WEBHOOK_URL) return;
+
+  const payload = {
+    // Overrides the name Discord shows against the message. Without it every notification arrives
+    // under whatever the webhook happened to be called in the channel settings, which is a name
+    // nobody chose for this purpose and can be changed from Discord without anyone here knowing.
+    username: "OverTranslate",
+    // avatar_url: "https://example.com/overtranslate.png",
+
+    embeds: [
+      {
+        title: "Cloudflare KV Logs",
+        color: 0x5865f2,
+
+        // The code gets a row to itself above the rest: it is the one thing here that has to be
+        // read off and typed somewhere else, and everything below it is context for it.
+        //
+        // `inline` is what puts fields side by side, so the three that describe the upload share a
+        // row and the two that are meant to be copied whole do not. The command is a field rather
+        // than the embed's `description` for the same reason the code is not: a description always
+        // renders above every field, and neither of them belongs at the very top.
+        fields: [
+          { name: "代碼", value: inline(format(metadata.code)) },
+          { name: "版本", value: inline(metadata.appVersion), inline: true },
+          { name: "系統", value: inline(metadata.os), inline: true },
+          { name: "大小", value: size(metadata.bytes), inline: true },
+          {
+            name: "取檔",
+            value: inline(`node tools/fetch-bundle.mjs ${format(metadata.code)}`),
+          },
+        ],
+
+        // Worth the line it takes: it says this is a thing that expires rather than an archive,
+        // which is the difference between reading a report next week and finding it gone.
+        footer: { text: "30 天後自動刪除" },
+
+        // The upload's own time rather than the moment Discord received the message. They are
+        // normally a second apart, and are not when a retry or a slow queue put them further so.
+        timestamp: metadata.uploadedAt,
+      },
+    ],
+
+    // The version and OS strings arrived in headers from a client anyone can impersonate. They
+    // are stripped to printable ASCII on the way in, which still leaves `@everyone` — so they go
+    // in as code spans, and mentions are switched off for the message as a whole rather than that
+    // escaping being the only thing between a bug report and a ping to everyone in the channel.
+    allowed_mentions: { parse: [] },
+  };
+
+  try {
+    const response = await fetch(env.DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    // Nothing to be done about a failure except leave it where `wrangler tail` will show it.
+    if (!response.ok) console.warn(`discord webhook: ${response.status}`);
+  } catch (error) {
+    console.warn(`discord webhook: ${error}`);
+  }
+}
+
+/** A code span, with the one character that could break out of it taken out. */
+function inline(value) {
+  return value ? `\`${value.replace(/`/g, "'")}\`` : "—";
+}
+
+/**
+ * Bytes below a kilobyte rather than a rounded-down `0 KB`, which reads as a bug at exactly the
+ * moment the number matters: a real bundle is megabytes, so anything this small is a test upload or
+ * a zip with nothing in it, and the actual count is what says which.
+ */
+function size(bytes) {
+  if (bytes < 1024) return `${bytes} bytes`;
+  return bytes < 1024 * 1024
+    ? `${Math.round(bytes / 1024)} KB`
+    : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /**

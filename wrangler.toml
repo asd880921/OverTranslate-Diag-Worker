@@ -34,3 +34,11 @@ namespace_id = "1001"
   [ratelimits.simple]
   limit = 5
   period = 60
+
+# There is no third binding here on purpose. The Discord webhook URL is a credential — anybody
+# holding it can post into the channel — so it lives as a secret rather than in this file, which
+# is in the repository:
+#
+#     npx wrangler secret put DISCORD_WEBHOOK_URL
+#
+# Never set, the worker simply does not notify. See OPERATING.md.

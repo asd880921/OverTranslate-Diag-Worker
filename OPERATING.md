@@ -70,6 +70,51 @@ node tools/fetch-bundle.mjs A3F-7K2
 
 `environment.txt` 裡的路徑會是 `%APPDATA%\...` 而不是 `C:\Users\<帳號>\...`。這是刻意的——Windows 帳號名有相當高的比例就是本人姓名，不該跟著檔案跑——代價是**沒辦法靠它判斷兩包是不是同一個人**，見下面那節。
 
+## 有人上傳時收到 Discord 通知
+
+設定過就會自動送，沒設定就整個功能關閉、Worker 照常運作。
+
+1. Discord 裡：**伺服器設定 → 整合 → Webhook → 建立 Webhook**，選好頻道，按「複製 Webhook 網址」。
+2. 把它存成 secret（**不要寫進 `wrangler.toml`**，那個檔案在 repo 裡）：
+
+   ```
+   npx wrangler secret put DISCORD_WEBHOOK_URL
+   ```
+
+   它會提示你貼上，貼完按 Enter。這條指令會自己重新部署。
+3. 用 App 傳一包，或直接對端點 POST 一個真的 zip，確認頻道有跳出訊息。
+
+訊息長這樣：
+
+```
+OverTranslate                        今天 23:55
+┃
+┃  Cloudflare KV Logs
+┃
+┃  代碼
+┃  A3F-7K2
+┃
+┃  版本          系統               大小
+┃  1.4.2        Windows 11 24H2    1.2 MB
+┃
+┃  取檔
+┃  node tools/fetch-bundle.mjs A3F-7K2
+┃
+┃  30 天後自動刪除
+```
+
+**那條 Webhook 網址等同於發文權限**，沒有帳號密碼可言。外流就到 Discord 那個 Webhook 頁面按刪除、重建一條，再跑一次 `wrangler secret put`。要整個關掉：
+
+```
+npx wrangler secret delete DISCORD_WEBHOOK_URL
+```
+
+訊息裡只有代碼、版本、系統、大小——就是 key metadata 的那幾項，跟儲存空間裡存的完全一樣，不含 IP、不含任何識別碼。**包本身不會送過去**：那是別人螢幕上的文字，它留在儲存空間裡，要拿得自己跑取檔腳本。
+
+版本與系統字串是客戶端送來的、任何人都能偽造，所以在訊息裡是用程式碼區塊包起來的，而且整則訊息關掉了 mention——不然有人把 `@everyone` 塞進 header 就能吵整個頻道。
+
+送不出去不會影響上傳。那時候包早就寫進儲存空間了，錯誤只會出現在 `npx wrangler tail`。
+
 ## 到底有沒有人上傳
 
 ```

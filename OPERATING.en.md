@@ -79,6 +79,59 @@ Paths in `environment.txt` read as `%APPDATA%\...` rather than `C:\Users\<name>\
 deliberate — the account name is the user's real name often enough that it should not travel — so
 two bundles cannot be told apart by it. See "Is this the same person" below.
 
+## Getting a Discord message when someone uploads
+
+Configured, it sends automatically. Not configured, the feature is simply off and the worker
+behaves exactly as it did before.
+
+1. In Discord: **Server Settings -> Integrations -> Webhooks -> New Webhook**, pick the channel,
+   then **Copy Webhook URL**.
+2. Store it as a secret — **not in `wrangler.toml`**, which is in the repository:
+
+   ```
+   npx wrangler secret put DISCORD_WEBHOOK_URL
+   ```
+
+   Paste at the prompt and press Enter. The command redeploys by itself.
+3. Upload from the app, or POST a real zip at the endpoint, and watch the channel.
+
+The message looks like this:
+
+```
+OverTranslate                        今天 23:55
+┃
+┃  Cloudflare KV Logs
+┃
+┃  代碼
+┃  A3F-7K2
+┃
+┃  版本          系統               大小
+┃  1.4.2        Windows 11 24H2    1.2 MB
+┃
+┃  取檔
+┃  node tools/fetch-bundle.mjs A3F-7K2
+┃
+┃  30 天後自動刪除
+```
+
+**That URL is posting rights**, with nothing else guarding it. If it leaks, delete the webhook on
+Discord's side, create a new one, and run `wrangler secret put` again. To turn the whole thing off:
+
+```
+npx wrangler secret delete DISCORD_WEBHOOK_URL
+```
+
+The message carries the code, version, OS and size — the key metadata and nothing beyond it, so no
+IP and no identifier of any kind. **The bundle itself does not go with it**: it is text that was on
+somebody's screen, and it stays in the store, where getting it out means running the fetch script.
+
+The version and OS strings come from a client anyone can impersonate, so they go into the message
+as code spans, and mentions are switched off for the message — otherwise `@everyone` in a header
+would ping the channel.
+
+A failure to send cannot affect an upload: the bundle is already stored by then, and the error only
+shows up in `npx wrangler tail`.
+
 ## Did anyone upload anything
 
 ```
