@@ -10,7 +10,7 @@ compatibility_date = "2026-08-21"
 # experimenting does not put anything in front of a real report.
 [[kv_namespaces]]
 binding = "BUNDLES"
-id = "REPLACE_WITH_NAMESPACE_ID"
+id = "adaebcbe81d94a9bbdb683b2fa0570e0"
 
 # Per-IP rate limiting. Still under `unsafe` in wrangler's schema, which is why the worker treats a
 # missing binding as "no limit" rather than falling over.
