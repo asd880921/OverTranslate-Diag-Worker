@@ -46,7 +46,7 @@ const ABOUT =
   "app's settings. It returns a short code. It cannot be read from — there is no download route.\n" +
   "Uploads are deleted automatically after 30 days.\n" +
   "\n" +
-  "Source: https://github.com/asd880921/overtranslate-diag-worker\n";
+  "Source: https://github.com/asd880921/OverTranslate-Diag-Worker\n";
 
 export default {
   async fetch(request, env) {

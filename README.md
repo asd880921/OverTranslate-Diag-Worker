@@ -1,4 +1,4 @@
-# overtranslate-diag-worker
+# OverTranslate-Diag-Worker
 
 The endpoint behind the **Export and upload diagnostics** button in
 [OverTranslate](https://github.com/asd880921/OverTranslate).
