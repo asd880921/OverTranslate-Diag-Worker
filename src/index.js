@@ -76,9 +76,9 @@ export default {
       return json(413, { error: "too_large", limit: MAX_BYTES });
     }
 
-    const limited = await isRateLimited(env, request);
-    if (limited) {
-      return json(429, { error: "rate_limited" }, { "retry-after": "60" });
+    const rate = await checkRateLimit(env, request);
+    if (rate.limited) {
+      return json(429, { error: "rate_limited" }, { "retry-after": "60", ...rate.diagnostics });
     }
 
     const body = new Uint8Array(await request.arrayBuffer());
@@ -89,7 +89,7 @@ export default {
       return json(413, { error: "too_large", limit: MAX_BYTES });
     }
     if (!looksLikeZip(body)) {
-      return json(415, { error: "not_a_zip" });
+      return json(415, { error: "not_a_zip" }, rate.diagnostics);
     }
 
     const code = await allocateCode(env.BUNDLES);
@@ -119,7 +119,7 @@ export default {
       },
     });
 
-    return json(200, { code: format(code) });
+    return json(200, { code: format(code) }, rate.diagnostics);
   },
 };
 
@@ -128,16 +128,31 @@ export default {
  * provision. Absent binding means no limit rather than no service: an endpoint that stops accepting
  * bug reports because a beta binding was renamed is worse than one that is briefly floodable, and
  * the size cap plus KV's own write quota still bound the damage.
+ *
+ * TEMPORARY: the `diagnostics` headers say which of the several ways this can quietly do nothing is
+ * happening — no binding, a throwing call, or a caller whose address is different on every request
+ * and so never fills one bucket. Remove them once that question is settled; an endpoint should not
+ * narrate its own internals to whoever asks.
  */
-async function isRateLimited(env, request) {
-  if (!env.RATE_LIMITER) return false;
-
+async function checkRateLimit(env, request) {
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const seen = { "x-diag-ip": ip };
+
+  if (!env.RATE_LIMITER) {
+    return { limited: false, diagnostics: { ...seen, "x-diag-rl": "binding-absent" } };
+  }
+
   try {
     const { success } = await env.RATE_LIMITER.limit({ key: ip });
-    return !success;
-  } catch {
-    return false;
+    return {
+      limited: !success,
+      diagnostics: { ...seen, "x-diag-rl": success ? "allowed" : "blocked" },
+    };
+  } catch (error) {
+    return {
+      limited: false,
+      diagnostics: { ...seen, "x-diag-rl": `threw: ${String(error).slice(0, 120)}` },
+    };
   }
 }
 
