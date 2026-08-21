@@ -1,0 +1,21 @@
+name = "overtranslate-diag"
+main = "src/index.js"
+compatibility_date = "2026-08-21"
+
+# The bucket the bundles land in. Objects are deleted after 30 days by a lifecycle rule, which
+# wrangler.toml cannot express — see DEPLOY.md, step 4. That rule is part of the deployment, not an
+# optional extra: without it this bucket becomes a permanent pile of other people's screen text.
+[[r2_buckets]]
+binding = "BUNDLES"
+bucket_name = "overtranslate-diagnostics"
+
+# Per-IP rate limiting. Still under `unsafe` in wrangler's schema, which is why the worker treats a
+# missing binding as "no limit" rather than falling over.
+#
+# Five a minute: a person collecting a bug report presses the button once, twice if the first
+# attempt failed. Anything past five is not that person.
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }
