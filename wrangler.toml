@@ -23,6 +23,10 @@ id = "adaebcbe81d94a9bbdb683b2fa0570e0"
 #
 # `period` accepts 10 or 60 and nothing else. Five a minute: a person collecting a bug report presses
 # the button once, twice if the first attempt failed. Anything past five is not that person.
+#
+# Read it as a flood guard, not a threshold — the counters are per-machine and reconciled
+# asynchronously, so a trickle above the number goes through and only volume gets refused. README.md
+# has the measurements.
 [[ratelimits]]
 name = "RATE_LIMITER"
 namespace_id = "1001"

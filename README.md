@@ -50,7 +50,7 @@ Anything else is refused:
 | 411 | no `Content-Length` |
 | 413 | body larger than 5 MB, declared or actual |
 | 415 | the body does not begin with a zip's `PK\x03\x04` header |
-| 429 | more than five uploads a minute from one IP |
+| 429 | sustained uploads from one IP — see below |
 
 ## What it stores
 
@@ -59,6 +59,17 @@ time, the reported app version and OS, and the size.
 
 **No IP address is stored, and there is no identifier that could link two uploads to the same
 person.** The client IP is used for rate limiting within a single request and is never written down.
+
+## What the rate limit actually does
+
+It is configured at five requests a minute per IP, and it should be read as a flood guard rather
+than a threshold. Measured against the deployed worker: a hundred requests from one address had a
+third refused, while a dozen spread over half a minute had none. Cloudflare's rate limiting binding
+caches its counters per machine within a location and reconciles them asynchronously, which is
+documented and is why it behaves this way.
+
+That is the right shape for this endpoint. A client sends one request per button press and must
+never be turned away; what is worth stopping is the volume that would fill the store.
 
 The code leads the key so that listing by it as a prefix lands on the one entry; the random tail is
 what stops the key being guessable from the code. There is no route that reads from the store — the

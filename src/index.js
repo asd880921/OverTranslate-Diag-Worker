@@ -76,9 +76,8 @@ export default {
       return json(413, { error: "too_large", limit: MAX_BYTES });
     }
 
-    const rate = await checkRateLimit(env, request);
-    if (rate.limited) {
-      return json(429, { error: "rate_limited" }, { "retry-after": "60", ...rate.diagnostics });
+    if (await isRateLimited(env, request)) {
+      return json(429, { error: "rate_limited" }, { "retry-after": "60" });
     }
 
     const body = new Uint8Array(await request.arrayBuffer());
@@ -89,7 +88,7 @@ export default {
       return json(413, { error: "too_large", limit: MAX_BYTES });
     }
     if (!looksLikeZip(body)) {
-      return json(415, { error: "not_a_zip" }, rate.diagnostics);
+      return json(415, { error: "not_a_zip" });
     }
 
     const code = await allocateCode(env.BUNDLES);
@@ -119,40 +118,38 @@ export default {
       },
     });
 
-    return json(200, { code: format(code) }, rate.diagnostics);
+    return json(200, { code: format(code) });
   },
 };
 
 /**
- * Per-IP, using the Workers rate limiting binding so there is no KV namespace or Durable Object to
- * provision. Absent binding means no limit rather than no service: an endpoint that stops accepting
- * bug reports because a beta binding was renamed is worse than one that is briefly floodable, and
- * the size cap plus KV's own write quota still bound the damage.
+ * Per-IP, using the Workers rate limiting binding so there is no extra namespace or Durable Object
+ * to provision.
  *
- * TEMPORARY: the `diagnostics` headers say which of the several ways this can quietly do nothing is
- * happening — no binding, a throwing call, or a caller whose address is different on every request
- * and so never fills one bucket. Remove them once that question is settled; an endpoint should not
- * narrate its own internals to whoever asks.
+ * Permissive by design, and measured to be so: a hundred requests from one address got a third of
+ * them refused, while a dozen spread over half a minute got none. The counters are cached per
+ * machine within a location and reconciled asynchronously, so this catches a flood and does not
+ * catch a trickle. That is the right shape for what it guards — the honest client sends one request
+ * per button press and must never be refused, and what is worth stopping is the volume that would
+ * fill the store, not the eleventh request.
+ *
+ * An absent binding means no limit rather than no service: an endpoint that stops accepting bug
+ * reports over its own limiter is worse than one that is briefly floodable, and the size cap plus
+ * KV's own write quota still bound the damage. The binding not arriving is a real failure mode
+ * rather than a hypothetical — see the note in wrangler.toml about the two spellings.
  */
-async function checkRateLimit(env, request) {
+async function isRateLimited(env, request) {
+  if (!env.RATE_LIMITER) return false;
+
+  // The docs advise against keying on an address because users share them. Here there is nothing
+  // else to key on: no account, no session, no installation id — and adding one to improve a rate
+  // limit would mean giving every reporter an identifier they did not have before.
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
-  const seen = { "x-diag-ip": ip };
-
-  if (!env.RATE_LIMITER) {
-    return { limited: false, diagnostics: { ...seen, "x-diag-rl": "binding-absent" } };
-  }
-
   try {
     const { success } = await env.RATE_LIMITER.limit({ key: ip });
-    return {
-      limited: !success,
-      diagnostics: { ...seen, "x-diag-rl": success ? "allowed" : "blocked" },
-    };
-  } catch (error) {
-    return {
-      limited: false,
-      diagnostics: { ...seen, "x-diag-rl": `threw: ${String(error).slice(0, 120)}` },
-    };
+    return !success;
+  } catch {
+    return false;
   }
 }
 
