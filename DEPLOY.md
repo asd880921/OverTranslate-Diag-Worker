@@ -81,6 +81,18 @@ node tools/fetch-bundle.mjs A3F-7K2
 
 Writes `A3F7K2.zip` into the current directory and prints what the metadata says about it.
 
+## Seeing what has been uploaded
+
+Run the same script with no code:
+
+```powershell
+node tools/fetch-bundle.mjs
+```
+
+It lists every bundle still in the store, newest first, with its code, upload time, app version, size
+and expiry. A code is a convenience for the reporter, not the way uploads are found: somebody who
+pressed the button and never opened a thread, or who quoted the code wrongly, still shows up here.
+
 `npx wrangler kv key get` is the obvious alternative and is the wrong tool here: it writes the value
 to stdout, and a zip that goes through PowerShell's redirection comes out re-encoded.
 
