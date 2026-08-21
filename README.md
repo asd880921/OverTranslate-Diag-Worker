@@ -88,6 +88,7 @@ remembered, for an upload to go away.
 - No accounts, no sessions, no upload history, no "the one I sent last time".
 - No download or browse route.
 
-## Deploying
+## Running it
 
-See [DEPLOY.md](DEPLOY.md).
+See [OPERATING.md](OPERATING.md) — reading a bundle somebody sent, seeing what has been uploaded,
+redeploying, and first-time setup.
