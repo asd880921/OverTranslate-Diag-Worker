@@ -2,12 +2,15 @@ name = "overtranslate-diag"
 main = "src/index.js"
 compatibility_date = "2026-08-21"
 
-# The bucket the bundles land in. Objects are deleted after 30 days by a lifecycle rule, which
-# wrangler.toml cannot express — see DEPLOY.md, step 4. That rule is part of the deployment, not an
-# optional extra: without it this bucket becomes a permanent pile of other people's screen text.
-[[r2_buckets]]
+# Where the bundles land. Nothing about retention is configured here: the worker sets a 30-day
+# expiry on every key as it writes it, which is one fewer thing that has to have been remembered
+# separately for this store not to become a permanent pile of other people's screen text.
+#
+# `wrangler dev` writes to a local store rather than this one unless it is given --remote, so
+# experimenting does not put anything in front of a real report.
+[[kv_namespaces]]
 binding = "BUNDLES"
-bucket_name = "overtranslate-diagnostics"
+id = "REPLACE_WITH_NAMESPACE_ID"
 
 # Per-IP rate limiting. Still under `unsafe` in wrangler's schema, which is why the worker treats a
 # missing binding as "no limit" rather than falling over.

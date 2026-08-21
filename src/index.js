@@ -1,10 +1,16 @@
 /**
  * OverTranslate diagnostic bundle receiver.
  *
- * The whole service is one idea: take a zip somebody pressed a button to send, put it in a bucket
- * under a name nobody can guess, and hand back a short code they can paste into a forum thread.
- * There is no database, no account, no session and no download endpoint — the code is an index for
- * the maintainer, not a URL.
+ * The whole service is one idea: take a zip somebody pressed a button to send, store it under a
+ * name nobody can guess, and hand back a short code they can paste into a forum thread. There is no
+ * account, no session and no download route — the code is an index for the maintainer, not a URL.
+ *
+ * The store is Workers KV rather than R2. KV is not what one would reach for to hold a five-megabyte
+ * blob, and the reason it is here is worth stating plainly: R2 requires a payment method on the
+ * account even inside its free allowance, and this endpoint exists so that reporting a bug costs
+ * nobody anything. KV's ceilings — 25 MiB a value, a thousand writes a day — sit an order of
+ * magnitude above what a handful of bug reports a day needs, and its per-key expiry does the job the
+ * R2 lifecycle rule would have had to be remembered for.
  *
  * Nothing here runs unless a person pressed the button in the app. There is no automatic upload and
  * no crash reporter, by design: verbose logging puts text that was on the user's screen into the
@@ -22,6 +28,12 @@ const CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /** 32^6 ≈ 1.07e9 — long enough not to collide, short enough to say in one breath. */
 const CODE_LENGTH = 6;
+
+/**
+ * Thirty days, in seconds. Set on each key as it is written rather than as a rule over the store, so
+ * an upload cannot outlive it by having arrived before somebody remembered to add the rule.
+ */
+const RETENTION_SECONDS = 30 * 24 * 60 * 60;
 
 /** "PK\x03\x04" — the local file header every real zip starts with. */
 const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04];
@@ -86,21 +98,24 @@ export default {
     }
 
     const now = new Date();
-    // The code leads the key so the maintainer can paste it straight into R2's prefix filter and
-    // land on the one object; the random tail is what stops the key itself being guessable.
+    // The code leads the key so that listing by it as a prefix lands on the one entry; the random
+    // tail is what stops the key itself being guessable from the code.
     const key = `${code}/${stamp(now)}-${randomHex(8)}.zip`;
 
     await env.BUNDLES.put(key, body, {
-      httpMetadata: { contentType: "application/zip" },
+      expirationTtl: RETENTION_SECONDS,
       // Deliberately no IP and no identifier of any kind: what is useful when reading a report is
-      // which build it came from and what it was running on, and nothing here should be able to
-      // tie two uploads to the same person.
-      customMetadata: {
+      // which build it came from and what it was running on, and nothing here should be able to tie
+      // two uploads to the same person.
+      //
+      // Metadata comes back with a key listing without the value being read, which is what makes
+      // finding one bundle among a month of them a listing rather than a run of downloads.
+      metadata: {
         code,
         uploadedAt: now.toISOString(),
         appVersion: header(request, "x-overtranslate-version"),
         os: header(request, "x-overtranslate-os"),
-        bytes: String(body.byteLength),
+        bytes: body.byteLength,
       },
     });
 
@@ -112,7 +127,7 @@ export default {
  * Per-IP, using the Workers rate limiting binding so there is no KV namespace or Durable Object to
  * provision. Absent binding means no limit rather than no service: an endpoint that stops accepting
  * bug reports because a beta binding was renamed is worse than one that is briefly floodable, and
- * the size cap plus R2's own quotas still bound the damage.
+ * the size cap plus KV's own write quota still bound the damage.
  */
 async function isRateLimited(env, request) {
   if (!env.RATE_LIMITER) return false;
@@ -127,15 +142,20 @@ async function isRateLimited(env, request) {
 }
 
 /**
- * A code nothing is stored under yet. Collisions at 1e9 codes and a handful of uploads a day are
- * theoretical, but the check is one class-A operation and the alternative is silently filing two
- * different users' bundles under one code.
+ * A code nothing is stored under yet. Collisions at a billion codes and a handful of uploads a day
+ * are theoretical, but the check is one listing and the alternative is silently filing two different
+ * users' bundles under one code.
+ *
+ * KV listings are eventually consistent, so this can miss a write from the last few seconds. That is
+ * accepted rather than worked around: closing it would mean reaching for a strongly consistent
+ * store, and the window it leaves is two uploads landing on the same one-in-a-billion code within a
+ * minute of each other.
  */
-async function allocateCode(bucket) {
+async function allocateCode(store) {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = randomCode();
-    const existing = await bucket.list({ prefix: `${code}/`, limit: 1 });
-    if (existing.objects.length === 0) return code;
+    const existing = await store.list({ prefix: `${code}/`, limit: 1 });
+    if (existing.keys.length === 0) return code;
   }
   return null;
 }
