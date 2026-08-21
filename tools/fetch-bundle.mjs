@@ -138,12 +138,24 @@ async function keys(prefix = "") {
   return found;
 }
 
-const uploadedAt = (entry) => entry.metadata?.uploadedAt ?? "";
+// Declarations rather than `const` arrows, and that is not a style choice: the work starts at an
+// `await list()` near the top of the file, so module evaluation is suspended there and never
+// reaches a `const` below it until the work is already done. Every one of these would be in the
+// temporal dead zone at the moment it was called, which is a ReferenceError at the first upload in
+// the listing rather than anything as visible as a syntax error.
+function uploadedAt(entry) {
+  return entry.metadata?.uploadedAt ?? "";
+}
 
-const format = (code) => `${code.slice(0, 3)}-${code.slice(3)}`;
+function format(code) {
+  return `${code.slice(0, 3)}-${code.slice(3)}`;
+}
 
-const stamp = (expiration) =>
-  expiration ? new Date(expiration * 1000).toISOString().replace("T", " ").slice(0, 16) : "?";
+function stamp(expiration) {
+  return expiration
+    ? new Date(expiration * 1000).toISOString().replace("T", " ").slice(0, 16)
+    : "?";
+}
 
 function fail(message) {
   console.error(message);

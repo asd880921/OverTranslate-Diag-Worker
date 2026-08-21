@@ -91,11 +91,17 @@ node tools/fetch-bundle.mjs
 上傳的檔案 30 天後會自己過期。若要提早移除——例如有人誤傳並要求撤下：
 
 ```
-npx wrangler kv key list --namespace-id=%CF_KV_NAMESPACE_ID% --prefix=A3F7K2/
-npx wrangler kv key delete "<完整的 key>" --namespace-id=%CF_KV_NAMESPACE_ID%
+npx wrangler kv key list --namespace-id=%CF_KV_NAMESPACE_ID% --prefix=A3F7K2/ --remote
+npx wrangler kv key delete "<完整的 key>" --namespace-id=%CF_KV_NAMESPACE_ID% --remote
 ```
 
 （PowerShell 請把 `%CF_KV_NAMESPACE_ID%` 換成 `$env:CF_KV_NAMESPACE_ID`。）
+
+**`--remote` 不能省。** wrangler v4 的 KV 指令預設操作的是本機儲存空間——跟 `wrangler dev` 用本機 KV
+是同一套邏輯——所以少了它，列表會回 `[]`、刪除會回報成功，而線上那一筆原封不動。它不會報錯，
+只會安靜地對著空的本機儲存空間動作。這一節的情境是有人誤傳並要求撤下，是最不該悄悄失敗的操作。
+
+刪完用 `node tools/fetch-bundle.mjs` 確認。那支腳本走的是 REST API，看到的一定是線上的實際狀態。
 
 ---
 

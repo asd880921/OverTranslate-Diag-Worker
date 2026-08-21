@@ -107,11 +107,20 @@ Uploads expire on their own after 30 days. To remove one sooner — someone sent
 and asked:
 
 ```
-npx wrangler kv key list --namespace-id=%CF_KV_NAMESPACE_ID% --prefix=A3F7K2/
-npx wrangler kv key delete "<the full key>" --namespace-id=%CF_KV_NAMESPACE_ID%
+npx wrangler kv key list --namespace-id=%CF_KV_NAMESPACE_ID% --prefix=A3F7K2/ --remote
+npx wrangler kv key delete "<the full key>" --namespace-id=%CF_KV_NAMESPACE_ID% --remote
 ```
 
 (PowerShell: `$env:CF_KV_NAMESPACE_ID` instead of `%CF_KV_NAMESPACE_ID%`.)
+
+**`--remote` is not optional.** Wrangler v4's KV commands work against the local store by default,
+the same one `wrangler dev` uses. Without it the listing comes back `[]` and the delete reports
+success while the live key sits there untouched. Nothing errors; it quietly operates on an empty
+local store. This section exists for the case where somebody uploaded by mistake and asked for it
+to come down, which is the last place a silent no-op belongs.
+
+Check with `node tools/fetch-bundle.mjs` afterwards. That script goes through the REST API, so
+what it prints is the live store.
 
 ---
 
