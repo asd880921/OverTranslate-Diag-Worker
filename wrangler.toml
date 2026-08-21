@@ -12,13 +12,21 @@ compatibility_date = "2026-08-21"
 binding = "BUNDLES"
 id = "adaebcbe81d94a9bbdb683b2fa0570e0"
 
-# Per-IP rate limiting. Still under `unsafe` in wrangler's schema, which is why the worker treats a
-# missing binding as "no limit" rather than falling over.
+# Per-IP rate limiting. The worker still treats a missing binding as "no limit" rather than falling
+# over, because an endpoint that stops accepting bug reports over its own limiter is worse than one
+# that is briefly floodable — but the binding has to actually arrive for that to be a safety net
+# rather than the normal case.
 #
-# Five a minute: a person collecting a bug report presses the button once, twice if the first
-# attempt failed. Anything past five is not that person.
-[[unsafe.bindings]]
+# `[[ratelimits]]` and not `[[unsafe.bindings]]`: this was promoted out of `unsafe` in wrangler, and
+# the old spelling still deploys. It just arrives as metadata the runtime does not act on, so the
+# binding is present, `limit()` answers, and nothing is ever limited.
+#
+# `period` accepts 10 or 60 and nothing else. Five a minute: a person collecting a bug report presses
+# the button once, twice if the first attempt failed. Anything past five is not that person.
+[[ratelimits]]
 name = "RATE_LIMITER"
-type = "ratelimit"
 namespace_id = "1001"
-simple = { limit = 5, period = 60 }
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
