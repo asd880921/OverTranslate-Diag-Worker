@@ -101,9 +101,19 @@ export default {
     // tail is what stops the key itself being guessable from the code.
     const key = `${code}/${stamp(now)}-${randomHex(8)}.zip`;
 
-    // Deliberately no IP and no identifier of any kind: what is useful when reading a report is
-    // which build it came from and what it was running on, and nothing here should be able to tie
-    // two uploads to the same person.
+    // Still no IP address, and still nothing derived from the machine or the person. What there is
+    // now is `id`: a random value the app issues itself on first launch and keeps in its settings,
+    // which says that two reports came from the same install and says nothing else at all. It
+    // cannot be read backwards to anyone, it changes if they reinstall, and the user can see it in
+    // the settings file that ships inside their own bundle.
+    //
+    // It is here because the alternative was worse. A second report from someone already being
+    // helped used to arrive indistinguishable from a stranger's, so the maintainer either asked
+    // them to identify themselves — which is a real name in a forum thread, and worse than a random
+    // number by a distance — or answered the same first questions again.
+    //
+    // Absent on any build older than the one that started sending it, and that stays a working
+    // state rather than a broken one: see how the notification renders it.
     //
     // Metadata comes back with a key listing without the value being read, which is what makes
     // finding one bundle among a month of them a listing rather than a run of downloads. The same
@@ -111,6 +121,7 @@ export default {
     const metadata = {
       code,
       uploadedAt: now.toISOString(),
+      id: header(request, "x-overtranslate-id"),
       appVersion: header(request, "x-overtranslate-version"),
       os: header(request, "x-overtranslate-os"),
       bytes: body.byteLength,
@@ -186,15 +197,21 @@ async function notify(env, metadata) {
         title: "Cloudflare KV Logs",
         color: 0x5865f2,
 
-        // The code gets a row to itself above the rest: it is the one thing here that has to be
-        // read off and typed somewhere else, and everything below it is context for it.
+        // The identifier leads, and the code follows it, because between them they are what decides
+        // whether this message needs opening at all: a familiar identifier turns a new report into
+        // the next message in a conversation, and the code is what every reply about it quotes.
         //
-        // `inline` is what puts fields side by side, so the three that describe the upload share a
-        // row and the two that are meant to be copied whole do not. The command is a field rather
-        // than the embed's `description` for the same reason the code is not: a description always
-        // renders above every field, and neither of them belongs at the very top.
+        // `inline` is what puts fields side by side, three to a row, and neither of these two takes
+        // it. Fifty-one characters do not fit a third of an embed — sharing a row with the code they
+        // wrapped onto three lines, which is harder to compare at a glance than the one thing anyone
+        // does with an identifier deserves.
+        //
+        // The command is a field rather than the embed's `description` for the same reason the two
+        // above are not: a description always renders above every field, and none of the three
+        // belongs at the very top.
         fields: [
-          { name: "代碼", value: inline(format(metadata.code)) },
+          { name: "ID", value: identity(metadata.id) },
+          { name: "回報代碼", value: inline(format(metadata.code)) },
           { name: "版本", value: inline(metadata.appVersion), inline: true },
           { name: "系統", value: inline(metadata.os), inline: true },
           { name: "大小", value: size(metadata.bytes), inline: true },
@@ -232,6 +249,19 @@ async function notify(env, metadata) {
   } catch (error) {
     console.warn(`discord webhook: ${error}`);
   }
+}
+
+/**
+ * The install identifier, or the word for there not being one.
+ *
+ * "None" rather than the dash every other empty field gets, because this blank means something the
+ * others do not: the upload came from a build made before the app had an identifier to send. That
+ * is a fact about the client worth reading at a glance — it dates the report on its own — where a
+ * dash would read as a value that went missing. Plain text rather than a code span for the same
+ * reason: it is this message's own word, not the client's.
+ */
+function identity(value) {
+  return value ? inline(value) : "None";
 }
 
 /** A code span, with the one character that could break out of it taken out. */

@@ -33,6 +33,7 @@ POST /v1/bundle
 content-type: application/zip
 x-overtranslate-version: 1.2.3      (optional, recorded as metadata)
 x-overtranslate-os: Windows 11 ...  (optional, recorded as metadata)
+x-overtranslate-id: 20260101...     (optional, recorded as metadata)
 
 <zip bytes, at most 5 MB>
 ```
@@ -55,10 +56,19 @@ Anything else is refused:
 ## What it stores
 
 One key per upload, at `<CODE>/<timestamp>-<random>`, with metadata recording the code, the upload
-time, the reported app version and OS, and the size.
+time, the reported app version, OS and install identifier, and the size.
 
-**No IP address is stored, and there is no identifier that could link two uploads to the same
-person.** The client IP is used for rate limiting within a single request and is never written down.
+**No IP address is stored.** The client IP is used for rate limiting within a single request and is
+never written down.
+
+The install identifier is the one thing here that links two uploads together, and it is worth being
+exact about what it is. The app issues it to itself on first launch from a timestamp and a random
+GUID, keeps it in its own settings file, and sends it with every upload. Nothing about the machine
+or the person goes into it, so it cannot be read backwards to either; it changes on a reinstall; and
+the user can read it in the settings file that ships inside their own bundle. It answers one
+question — are these two reports the same install — and it is here because the alternative was
+asking people to identify themselves in a public thread, which is a worse answer to the same
+question.
 
 ## What the rate limit actually does
 

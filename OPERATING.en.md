@@ -102,7 +102,10 @@ OverTranslate                        今天 23:55
 ┃
 ┃  Cloudflare KV Logs
 ┃
-┃  代碼
+┃  ID
+┃  20260101093000-3f2504e0-4f89-41d3-9a0c-0305e82c3301
+┃
+┃  回報代碼
 ┃  A3F-7K2
 ┃
 ┃  版本          系統               大小
@@ -121,9 +124,12 @@ Discord's side, create a new one, and run `wrangler secret put` again. To turn t
 npx wrangler secret delete DISCORD_WEBHOOK_URL
 ```
 
-The message carries the code, version, OS and size — the key metadata and nothing beyond it, so no
-IP and no identifier of any kind. **The bundle itself does not go with it**: it is text that was on
+The message carries the install identifier, code, version, OS and size — the key metadata and
+nothing beyond it, so no IP. **The bundle itself does not go with it**: it is text that was on
 somebody's screen, and it stays in the store, where getting it out means running the fetch script.
+
+An ID of `None` means the upload came from a build older than the identifier itself. That is not a
+failure — it is this message telling you how old their app is.
 
 The version and OS strings come from a client anyone can impersonate, so they go into the message
 as code spans, and mentions are switched off for the message — otherwise `@everyone` in a header
@@ -147,12 +153,22 @@ never opened a thread, or who quoted the code wrongly, only ever appears here.
 
 ## Is this the same person as last time
 
-There is no answer the store can give you. No IP and no identifier is stored with an upload, and the
-paths inside the bundle no longer carry the Windows account name.
+Read the ID. The same value is the same install, and it is on the Discord message, so the question
+is answered without fetching anything.
 
-What is left is circumstantial and inside the bundle: the display topology in the log (monitor device
-names, exact resolutions, DPI), and the shape of their settings (hotkeys, colours, capture target).
-Enough to form an opinion about "probably the same machine", not enough to rely on.
+The app issues it to itself on first launch — a timestamp and a random GUID — keeps it in its own
+settings file, and sends it with every upload. Nothing about the machine or the person goes into it,
+so it cannot be read backwards to either; a reinstall issues a new one; and the user can read it in
+the `appsettings.redacted.json` inside their own bundle. It answers one question and no other.
+
+`None` means their app predates the identifier. Then what is left is circumstantial and inside the
+bundle: the display topology in the log (monitor device names, exact resolutions, DPI), and the shape
+of their settings (hotkeys, colours, capture target). Enough to form an opinion about "probably the
+same machine", not enough to rely on.
+
+The other direction does not hold: a different ID is **not** evidence of a different person. A new
+machine, a reinstall or a deleted settings file all issue a new one. It can prove same, never
+different.
 
 ## Deleting something before its time
 
