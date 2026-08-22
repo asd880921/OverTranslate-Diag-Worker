@@ -197,22 +197,21 @@ async function notify(env, metadata) {
         title: "Cloudflare KV Logs",
         color: 0x5865f2,
 
-        // Who and which, on the top row, because between them they are what decides whether this
-        // message needs opening at all: a familiar identifier turns a new report into the next
-        // message in a conversation, and the code is what every reply about it has to quote.
+        // The identifier leads, and the code follows it, because between them they are what decides
+        // whether this message needs opening at all: a familiar identifier turns a new report into
+        // the next message in a conversation, and the code is what every reply about it quotes.
         //
-        // `inline` is what puts fields side by side, three to a row. The empty field after the
-        // code is what holds this row to two: without it Discord fills the third column with
-        // 版本 and the two rows below shuffle up by one apiece. It is a zero-width space
-        // because the API rejects a field whose name or value is empty.
+        // `inline` is what puts fields side by side, three to a row, and neither of these two takes
+        // it. Fifty-one characters do not fit a third of an embed — sharing a row with the code they
+        // wrapped onto three lines, which is harder to compare at a glance than the one thing anyone
+        // does with an identifier deserves.
         //
-        // The command is a field rather than the embed's `description`, and full width like the
-        // identifier above it: a description always renders above every field, and this is the
-        // other thing here meant to be copied whole rather than read.
+        // The command is a field rather than the embed's `description` for the same reason the two
+        // above are not: a description always renders above every field, and none of the three
+        // belongs at the very top.
         fields: [
-          { name: "ID", value: identity(metadata.id), inline: true },
-          { name: "回報代碼", value: inline(format(metadata.code)), inline: true },
-          { name: "\u200b", value: "\u200b" },
+          { name: "ID", value: identity(metadata.id) },
+          { name: "回報代碼", value: inline(format(metadata.code)) },
           { name: "版本", value: inline(metadata.appVersion), inline: true },
           { name: "系統", value: inline(metadata.os), inline: true },
           { name: "大小", value: size(metadata.bytes), inline: true },
