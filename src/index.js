@@ -257,11 +257,15 @@ async function notify(env, metadata) {
  * "None" rather than the dash every other empty field gets, because this blank means something the
  * others do not: the upload came from a build made before the app had an identifier to send. That
  * is a fact about the client worth reading at a glance — it dates the report on its own — where a
- * dash would read as a value that went missing. Plain text rather than a code span for the same
- * reason: it is this message's own word, not the client's.
+ * dash would read as a value that went missing.
+ *
+ * In a code span like every other value in the message, even though it is this message's own word
+ * rather than the client's. The span is what the eye follows down the card; a bare line of text
+ * where every other field has a box reads as something having gone wrong with the field, which is
+ * the one thing this value must not say.
  */
 function identity(value) {
-  return value ? inline(value) : "None";
+  return inline(value || "None");
 }
 
 /** A code span, with the one character that could break out of it taken out. */
